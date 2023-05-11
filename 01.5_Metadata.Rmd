@@ -1,0 +1,175 @@
+---
+title: "Add Metadata"
+author: "Drake Williams"
+date: "`r BiocStyle::doc_date()`"
+output: html_document
+knit: (function(inputFile, encoding) { 
+    rmarkdown::render(
+        inputFile, encoding = encoding, 
+        output_file = file.path(
+            dirname(inputFile), paste0('01_Soupx_',Sys.Date(),'.html'))) 
+                })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = F,
+  message = F, 
+  out.width = "100%",
+  fig.align = "center"
+)
+options(width = 1200)
+```
+
+# Introduction
+
+The objective of this notebook is to add metadata to seurat objects. For some reason, when using Rmarkdown, the Add_Sample_Meta fails, but runs fine when running code chunks individually.
+
+## Load packages
+
+```{r load packages}
+# load packages
+library(pacman)
+p_load(Seurat, scCustomize, dplyr, GEOquery)
+# load data
+baseDir <- "~/updatedAtlas-hu/04_data_objects/01_SoupX_objects/"
+NIH <- readRDS(file = paste0(baseDir, "2023-04-17_01-SoupxOutput.RDS"))
+```
+
+## Add metadata to seurat objects
+```{r add NIH meta}
+# read meta file from patient DB
+metaToAdd <- read.csv(file = "/home/williamsdrw/10x_samples.csv")
+# get current seurat obj metadata
+currentMeta <- NIH@meta.data
+# select relevant metadata columns from the patient DB file
+colsToKeep <- names(metaToAdd)[c(1,4,7,10,11,13)]
+metaToAdd <- metaToAdd[,names(metaToAdd) %in% colsToKeep]
+# select rows in the patient DB file that correspond to samples used in seurat obj
+metaToAdd <- metaToAdd[metaToAdd$Sample.ID %in% unique(currentMeta$orig.ident),]
+# rename some columns
+names(metaToAdd)[names(metaToAdd) == 'Sample.ID'] <- 'orig.ident'
+names(metaToAdd)[names(metaToAdd) == 'Gender'] <- 'sex'
+names(metaToAdd)[names(metaToAdd) == 'Age'] <- 'age'
+names(metaToAdd)[names(metaToAdd) == 'Tech'] <- 'tech'
+names(metaToAdd)[names(metaToAdd) == 'Sample.Type'] <- 'tissue'
+# add additional info for cross-comparison with other datasets
+metaToAdd$ref <- "Williams 2021"
+metaToAdd$source <- "GSE164241"
+# add the metadata using scCustomize function
+NIH <- Add_Sample_Meta(NIH, metaToAdd, join_by_meta = "orig.ident", join_by_seurat = "orig.ident")
+# check/confirm the structure of the seurat object metadata
+NIH@meta.data
+```
+
+```{r import caetano data}
+# set up some variables to grab/save data from GEO
+caetano2021 <- "GSE152042"
+myDir <- "/home/williamsdrw/updatedAtlas-hu/02_raw_data/"
+# get GEO information
+gse <- getGEO(caetano2021)
+# get GEO files
+getGEOSuppFiles(GEO = caetano2021, baseDir = myDir)
+myDir <- paste0(myDir,caetano2021,"/")
+files <- list.files(myDir) %>%
+  .[grepl("tar", .)]
+#untar files
+untar(paste0(myDir,files),
+      exdir = paste0(myDir))
+# make a list of files that have RNA counts
+files <- list.files(myDir) %>%
+  .[!grepl("GSE", .)]
+# get/tidy metadata from GEO object to match other sample metadata
+metadata <- as.data.frame(pData(gse[[1]])) %>%
+  .[c("title", "extract_protocol_ch1.1", "disease state:ch1")]
+colnames(metadata) <- c("orig.ident", "tech", "status")
+statusChange <- unique(metadata$status)
+# rename some columns
+metadata[metadata == statusChange[1]] <- "H"
+metadata[metadata == statusChange[2]] <- "MP"
+metadata[metadata == statusChange[3]] <- "P"
+metadata$sex <- c("M", "M", "F", "M")
+# add additional info for cross-comparison with other datasets
+metadata$tissue <- "gingiva"
+metadata$source <- caetano2021
+metadata$ref <- "Caetano 2021"
+metadata$age <- "41-65"
+# save the tidy metadata just in case
+write.csv(metadata, file = paste0("/home/williamsdrw/updatedAtlas-hu/03_meta_data/", Sys.Date(), "_GSE152042_metadata.csv"))
+# combine all deposited data into a list
+seurat_list <- list()
+for(i in seq_along(files)){
+  temp <- Read10X_h5(paste0(myDir, files[i]))
+  seurat_list[i] <- CreateSeuratObject(temp,
+                                       project = metadata$orig.ident[i])
+}
+# generate seurat object and add metadata
+caetano_srat <- Merge_Seurat_List(list_seurat = seurat_list)
+caetano_srat <- Add_Sample_Meta(caetano_srat, meta_data = metadata, join_by_meta = "orig.ident", join_by_seurat = "orig.ident")
+# check/confirm the structure of the seurat object metadata
+caetano_srat@meta.data
+```
+
+```{r import chen data}
+# set up some variables to grab/save data from GEO
+chen2022 <- "GSE171213"
+# get GEO information
+gse <- getGEO(chen2022)
+# get GEO files
+getGEOSuppFiles(GEO = chen2022, baseDir = myDir)
+myDir <- paste0(myDir,chen2022,"/")
+files <- list.files(myDir) %>%
+  .[grepl("tar", .)]
+#untar files
+untar(paste0(myDir,files),
+      exdir = paste0(myDir))
+# make a list of files that have RNA counts
+files <- list.files(myDir) %>%
+  .[!grepl("cellname|GSE171213", .)]
+# get/tidy metadata from GEO object to match other sample metadata
+metadata <- as.data.frame(pData(gse[[1]])) %>%
+  .[c("title", "extract_protocol_ch1.1", "age:ch1", "gender:ch1", "group:ch1", "tissue:ch1")]
+colnames(metadata) <- c("orig.ident", "tech", "age", "sex", "status", "tissue")
+statusChange <- unique(metadata$status)
+metadata[metadata == statusChange[1]] <- "H"
+metadata[metadata == statusChange[2]] <- "P"
+metadata[metadata == statusChange[3]] <- "P_treated"
+metadata$sex <- substr(metadata$sex, 0, 1)
+# add additional info for cross-comparison with other datasets
+metadata$tissue <- "gingiva"
+metadata$tech <- "BD Rhapsody"
+metadata$source <- chen2022
+metadata$ref <- "Chen 2022"
+# save the tidy metadata just in case
+write.csv(metadata, file = paste0("/home/williamsdrw/updatedAtlas-hu/03_meta_data/", Sys.Date(), "_GSE171213_metadata.csv"))
+# combine all deposited data into a list
+seurat_list <- list()
+for(i in seq_along(files)){
+  tab <- read.table(paste0(myDir, files[i]), 
+                    header = T, 
+                    sep = "\t", 
+                    row.names = 1, 
+                    check.names = T)
+  seurat_list[i] <- CreateSeuratObject(tab,
+                                       project = metadata$orig.ident[i])
+}
+# generate seurat object and add metadata
+chen_srat <- Merge_Seurat_List(list_seurat = seurat_list)
+chen_srat <- Add_Sample_Meta(chen_srat, meta_data = metadata, join_by_meta = "orig.ident", join_by_seurat = "orig.ident")
+# check/confirm the structure of the seurat object metadata
+chen_srat@meta.data
+```
+
+
+```{r combine objects and save}
+# combine all seurat files
+all <- merge(x=NIH, y=c(caetano_srat, chen_srat))
+# save seurat obj with meta
+saveRDS(all, file = paste0(baseDir, Sys.Date(), "_015-allWithMeta.RDS"))
+```
+
+```{r session info}
+sessionInfo()
+```
+

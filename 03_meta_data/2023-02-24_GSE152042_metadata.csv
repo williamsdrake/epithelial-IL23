@@ -1,0 +1,5 @@
+"","orig.ident","tech","status","sex","tissue","source","ref","age"
+"GSM4600896","Healthy 1","10x 3' RNAseq (V3)","H","M","gingiva","GSE152042","Caetano 2021","41-65"
+"GSM4600897","Healthy 2","10x 3' RNAseq (V3)","H","M","gingiva","GSE152042","Caetano 2021","41-65"
+"GSM4600898","Mild","10x 3' RNAseq (V3)","MP","F","gingiva","GSE152042","Caetano 2021","41-65"
+"GSM4600899","Severe","10x 3' RNAseq (V3)","P","M","gingiva","GSE152042","Caetano 2021","41-65"

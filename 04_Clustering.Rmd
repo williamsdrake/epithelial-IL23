@@ -1,0 +1,347 @@
+---
+title: "Clustering"
+author: "Drake Williams"
+date: "`r BiocStyle::doc_date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  out.width = "100%",
+  fig.align = "center"
+)
+options(width = 1200)
+```
+
+# Introduction
+
+The objective of this notebook is to perform clustering and identify cell types present in the dataset
+
+## Load packages
+
+```{r load packages}
+library(pacman)
+p_load(Seurat)
+# library(Seurat)
+# library(dplyr)
+# library(SingleR)
+# library(BiocParallel)
+# library(paletteer)
+# library(scCustomize)
+# library(ggpubr)
+# library(ggrepel)
+```
+
+## Load datasets
+```{r load datasets}
+baseDir <- "~/updatedAtlas-hu/04_data_objects/03_Analysis_objects/"
+oralIntegrated <- readRDS(file = paste0(baseDir, "2023-04-27_03-IntegrationOutput.RDS"))
+
+```
+
+## Cluster ID and Metadata
+
+```{r cc regression and clustering}
+## Cell-cycle scoring and regression
+s.genes <- cc.genes.updated.2019$s.genes
+g2m.genes <- cc.genes.updated.2019$g2m.genes
+oralIntegrated <- CellCycleScoring(oralIntegrated,
+  s.features = s.genes, g2m.features = g2m.genes,
+  set.ident = TRUE
+)
+oralIntegrated <- ScaleData(oralIntegrated, vars.to.regress = c("S.Score", "G2M.Score"), verbose = TRUE)
+
+# Follow typical workflow
+oralIntegrated <- RunPCA(oralIntegrated, verbose = FALSE)
+oralIntegrated <- FindNeighbors(oralIntegrated, dims = 1:50)
+oralIntegrated <- FindClusters(oralIntegrated, verbose = FALSE, resolution = 1)
+oralIntegrated <- RunUMAP(oralIntegrated, dims = 1:50)
+```
+## Identify and remove RBC contaminated clusters based on marker gene expression
+```{r remove RBC}
+# Set appropriate assay and cluster level that will enable identification of RBC/all groups
+DefaultAssay(oralIntegrated) <- "RNA"
+Idents(oralIntegrated) <- "integrated_snn_res.0.8"
+
+# Find cluster defining markers
+all.markers.1 <- FindAllMarkers(oralIntegrated, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.75)
+significant.markers.1 <- all.markers.1[all.markers.1$p_val_adj < 0.2, ]
+# Print some top markers
+significant.markers.1 %>%
+  group_by(cluster) %>%
+  top_n(n = 5, wt = avg_log2FC)
+# Save top markers
+top.markers.1 <- significant.markers.1 %>%
+  group_by(cluster) %>%
+  top_n(n = 30, wt = avg_log2FC)
+baseDir <- "~/updatedAtlas-hu/07_csv_outputs/"
+write.csv(top.markers.1, paste0(baseDir, Sys.Date(), "_top30_res1.csv"))
+
+# Save copy of object prior to removal of RBC clusters
+baseDir <- "~/updatedAtlas-hu/04_data_objects/03_Analysis_objects/"
+saveRDS(oralIntegrated,
+  file = paste0(baseDir, Sys.Date(), "_04-ClusteringOutput.RDS")
+)
+
+```
+## Cell identification
+
+```{r classify cells}
+Idents(oralIntegrated) <- "integrated_snn_res.0.8"
+
+# Rename idents by major cell type (e.g. Fib, Endo, Epi, etc)
+oralIntegrated <- RenameIdents(oralIntegrated,
+  "0" = "Immune (Pl)",
+  "1" = "Fibroblast 1",
+  "2" = "Endothelial 1",
+  "3" = "Immune (T/NK)",
+  "4" = "Immune (Pl)",
+  "5" = "Endothelial 2",
+  "6" = "Immune (APC)",
+  "7" = "Immune (T/NK)",
+  "8" = "Immune (Neut)",
+  "9" = "Immune (T/NK)",
+  "10" = "Fibroblast 2",
+  "11" = "Epithelial 1",
+  "12" = "Immune (T/NK)",
+  "13" = "Immune (B)",
+  "14" = "Endothelial 3",
+  "15" = "Immune (Mast)",
+  "16" = "Immune (T/NK)",
+  "17" = "Endothelial",
+  "18" = "SMC",
+  "19" = "Epithelial 2",
+  "20" = "SMC",
+  "21" = "Endothelial 4",
+  "22" = "SMC",
+  "23" = "RBC",
+  "24" = "Epithelial 3",
+  "25" = "", # no deg
+  "26" = "Immune (pDC)",
+  "27" = "Immune (Pl)",
+  "28" = "Fibroblast 3",
+  "29" = "Cycling",
+  "30" = "Epithelial 4",
+  "31" = "Immune (Mast)",
+  "32" = "Immune (B and T)" # remove likely doublet
+)
+oralIntegrated <- subset(oralIntegrated,
+  idents = c("", "RBC", "Immune (B and T)"),
+  invert = TRUE
+)
+oralIntegrated$clusterCellTypes <- oralIntegrated@active.ident
+
+Idents(oralIntegrated) <- "integrated_snn_res.0.8"
+
+# Rename idents by major cell type (e.g. Fib, Endo, Epi, etc)
+oralIntegrated <- RenameIdents(oralIntegrated,
+  "0" = "Immune",
+  "1" = "Fibroblast",
+  "2" = "Endothelial",
+  "3" = "Immune",
+  "4" = "Immune",
+  "5" = "Endothelial",
+  "6" = "Immune",
+  "7" = "Immune",
+  "8" = "Immune",
+  "9" = "Immune",
+  "10" = "Fibroblast",
+  "11" = "Epithelial",
+  "12" = "Immune",
+  "13" = "Immune",
+  "14" = "Endothelial",
+  "15" = "Immune",
+  "16" = "Immune",
+  "17" = "Endothelial",
+  "18" = "SMC",
+  "19" = "Epithelial",
+  "20" = "SMC",
+  "21" = "Endothelial",
+  "22" = "SMC",
+  "24" = "Epithelial",
+  "26" = "Immune",
+  "27" = "Immune",
+  "28" = "Fibroblast",
+  "29" = "Cycling",
+  "30" = "Epithelial",
+  "31" = "Immune"
+)
+
+
+levels(oralIntegrated) <- c(
+  "Endothelial",
+  "Fibroblast",
+  "Immune",
+  "Epithelial",
+  "Cycling",
+  "SMC"
+)
+oralIntegrated$generalCellTypes <- oralIntegrated@active.ident
+
+
+```
+
+
+
+## Immune cell identification
+```{r classify immune cells}
+Idents(oralIntegrated) <- "generalCellTypes"
+im <- subset(oralIntegrated, idents = "Immune")
+
+
+# use SingleR
+# seurat object -> SingleCellExperiment
+immuneSCE <- as.SingleCellExperiment(im)
+
+# reference database
+mon.se <- MonacoImmuneData()
+pred.mon.fine <- SingleR(
+  test = immuneSCE,
+  ref = mon.se,
+  labels = mon.se$label.fine,
+  de.method = "classic",
+  fine.tune = TRUE,
+  assay.type.test = 1,
+  BPPARAM = MulticoreParam(8)
+)
+
+im[["mon.fine"]] <- pred.mon.fine$labels
+
+Idents(im) <- "mon.fine"
+DefaultAssay(im) <- "integrated"
+im <- RunPCA(im, npcs = 50)
+im <- RunUMAP(im, reduction = "pca", dims = 1:50)
+Idents(im) <- "mon.fine"
+DimPlot(im, group.by = "mon.fine", label = TRUE, reduction = "umap")
+
+DefaultAssay(im) <- "RNA"
+im <- RenameIdents(im,
+  "Intermediate monocytes" = "Monocyte",
+  "Classical monocytes" = "Monocyte",
+  "Exhausted B cells" = "B",
+  "Effector memory CD8 T cells" = "abT (CD8)",
+  "Myeloid dendritic cells" = "mDC",
+  "T regulatory cells" = "Treg",
+  "Th1 cells" = "abT (CD4)",
+  "Th2 cells" = "abT (CD4)",
+  "Th1/Th17 cells" = "abT (CD4)",
+  "Switched memory B cells" = "B",
+  "Low-density basophils" = "Mast",
+  "Terminal effector CD4 T cells" = "abT (CD4)",
+  "Progenitor cells" = "Mast",
+  "Natural killer cells" = "NK",
+  "Non-switched memory B cells" = "B",
+  "Central memory CD8 T cells" = "abT (CD8)",
+  "Terminal effector CD8 T cells" = "abT (CD8)",
+  "Non classical monocytes" = "Monocyte",
+  "Plasmacytoid dendritic cells" = "pDC",
+  "Naive CD4 T cells" = "abT (CD4)",
+  "Vd2 gd T cells" = "gd T",
+  "Th17 cells" = "Th17",
+  "Follicular helper T cells" = "abT (CD4)",
+  "Plasmablasts" = "Plasma",
+  "MAIT cells" = "MAIT",
+  "Naive CD8 T cells" = "abT (CD8)",
+  "Low-density neutrophils" = "Neutrophil",
+  "Non-Vd2 gd T cells" = "gd T",
+  "Naive B cells" = "B"
+)
+levels(im) <- c(
+  "abT (CD4)", "Th17", "MAIT", "abT (CD8)", "gd T", "Treg", "NK",
+  "pDC", "B", "Plasma",
+  "Neutrophil", "Monocyte", "mDC", "Mast"
+)
+im$mon.fine <- im@active.ident
+
+DefaultAssay(im) <- "RNA"
+immune.markers.2 <- FindAllMarkers(im, only.pos = TRUE)
+im.sig.2 <- immune.markers.2[immune.markers.2$p_val_adj < 0.2, ]
+im.top.2 <- im.sig.2 %>%
+  group_by(cluster) %>%
+  top_n(n = 30, wt = avg_log2FC)
+write.csv(im.top.2, paste0(getwd(),
+                           "/06_cluster_annotation/", 
+                           Sys.Date(),
+                           "_integrated_immune_clusterMarkers_top30_SingleR.csv"))
+
+Idents(im) <- "mon.fine"
+im <- RenameIdents(im,
+  "abT (CD4)" = "Lymphoid (T/NK)",
+  "Th17" = "Lymphoid (T/NK)",
+  "MAIT" = "Lymphoid (T/NK)",
+  "abT (CD8)" = "Lymphoid (T/NK)",
+  "gd T" = "Lymphoid (T/NK)",
+  "Treg" = "Lymphoid (T/NK)",
+  "NK" = "Lymphoid (T/NK)",
+  "pDC" = "Myeloid",
+  "B" = "Lymphoid (B)",
+  "Plasma" = "Lymphoid (Pl)",
+  # "Neutrophil" = "Neutrophil", Already correctly named
+  "Monocyte" = "Myeloid",
+  # "Mast" = "Mast", Already correctly named
+  "mDC" = "Myeloid"
+)
+levels(im) <- c("Lymphoid (T/NK)", "Lymphoid (Pl)", "Lymphoid (B)", "Myeloid", "Mast", "Neutrophil")
+im$imGen <- im@active.ident
+
+
+# Generate a new column called sub_cluster in the metadata
+oralIntegrated$fineCellTypes <- as.character(Idents(oralIntegrated))
+
+# Change the information of cells containing sub-cluster information
+oralIntegrated$fineCellTypes[Cells(im)] <- paste(Idents(im))
+
+# define the colors for 'fineCellType' clusters and store in the seurat object
+fineCellPal <- c("black", 
+                 rev(paletteer::paletteer_d(`"ggsci::default_nejm"`)[3:8]), 
+                 paletteer::paletteer_d(`"ggsci::default_jco"`)[1:4])
+oralIntegrated <- Store_Misc_Info_Seurat(
+  seurat_object = oralIntegrated, data_to_store = fineCellPal,
+  data_name = "fineCellPal_colors"
+)
+
+Idents(oralIntegrated) <- oralIntegrated$fineCellTypes
+all.markers.1 <- FindAllMarkers(oralIntegrated, only.pos = TRUE)
+# Print some top markers
+top20 <- all.markers.1 %>%
+  group_by(cluster) %>%
+  top_n(n = 20, wt = avg_log2FC)
+top20
+write.csv(all.markers.1, file = paste0(getwd(),"/06_cluster_annotation/", 
+                                        Sys.Date(),
+                                        "_integrated_clustered_NIH_caetano_chen_fineCellTypes.csv"))
+
+DimPlot(oralIntegrated, 
+        group.by = "fineCellTypes", 
+        cols = oralIntegrated@misc$fineCellPal_colors)
+
+genCols <- c(paletteer_d("ggsci::nrc_npg")[c(1,3,4,9)], 
+             paletteer_d("ggsci::default_jco")[c(2,3)])
+oralIntegrated <- Store_Misc_Info_Seurat(
+  seurat_object = oralIntegrated, data_to_store = genCols,
+  data_name = "genCellPal_colors"
+)
+
+DimPlot(oralIntegrated, 
+        group.by = "generalCellTypes", 
+        cols = oralIntegrated@misc$genCellPal_colors)
+```
+
+
+## Save new objects
+```{r save objects}
+baseDir <- "~/updatedAtlas-hu/04_data_objects/03_Analysis_objects/"
+saveRDS(oralIntegrated,
+  file = paste0(
+    baseDir,
+    Sys.Date(),
+    "_04-ClusteringOutput.RDS"
+  )
+)
+```
+
+## Session Info
+```{r session info}
+sessionInfo()
+```

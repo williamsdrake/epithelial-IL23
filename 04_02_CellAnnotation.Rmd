@@ -1,0 +1,365 @@
+---
+title: "Cell Annotation"
+author: "Drake Williams"
+date: "`r BiocStyle::doc_date()`"
+output: html_document
+knit: (function(inputFile, encoding) { 
+    rmarkdown::render(
+        inputFile, encoding = encoding, 
+        output_file = file.path(
+            dirname(inputFile), paste0('03_Integration_',Sys.Date(),'.html'))) 
+                })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = F,
+  message = F, 
+  message = F,
+  out.width = "100%",
+  fig.align = "center"
+)
+options(width = 1200)
+```
+
+# Introduction
+
+The objective of this notebook is to perform clustering and identify cell types present in the dataset
+
+## Load packages
+
+```{r load packages}
+library(pacman)
+p_load(Seurat,SingleR,BiocParallel,scCustomize,future,dplyr)# library(Seurat)
+```
+
+## Load datasets
+```{r load datasets}
+baseDir <- "~/updatedAtlas-hu/04_data_objects/03_Analysis_objects/"
+oralIntegrated <- readRDS(file = paste0(baseDir, "2023-04-28_04_01-ClusteringOutput.RDS"))
+```
+
+## Cell identification
+
+```{r classify cells}
+Idents(oralIntegrated) <- "seurat_clusters"
+
+# Rename idents by major cell type (e.g. Fib, Endo, Epi, etc)
+oralIntegrated <- RenameIdents(oralIntegrated,
+  "0" = "Endothelial 1",
+  "1" = "Fibroblast 1",
+  "2" = "Immune (T/NK)",
+  "3" = "Immune (T/NK)",
+  "4" = "Immune (Pl)",
+  "5" = "Endothelial 2",
+  "6" = "Immune (Pl)",
+  "7" = "Immune (APC)",
+  "8" = "Epithelial 1",
+  "9" = "Fibroblast 2",
+  "10" = "Immune (Neut)",
+  "11" = "Immune (T/NK)",
+  "12" = "Endothelial 3",
+  "13" = "SMC",
+  "14" = "Immune (Mast)",
+  "15" = "SMC",
+  "16" = "Immune (B)",
+  "17" = "Epithelial 2",
+  "18" = "Immune (APC)",
+  "19" = "Immune (T/NK)",
+  "20" = "Immune (T/NK)",
+  "21" = "Epithelial 3",
+  "22" = "RBC",
+  "23" = "LEC",
+  "24" = "Endothelial 3",
+  "25" = "Immune (Pl)", 
+  "26" = "Cycling",
+  "27" = "Immune (Pl)",
+  "28" = "Fibroblast 3",
+  "29" = "Immune (pDC)",
+  "30" = "Immune (Pl)",
+  "31" = "Immune (APC)",
+  "32" = "Melanocyte",
+  "33" = "SMC",
+  "34" = "Stressed",
+  "35" = "Immune (Pl)",
+  "36" = "Immune (Pl)",
+  "37" = "Fibroblast 4",
+  "38" = "Immune (Pl)",
+  "39" = "Endothelial 4",
+  "40" = "RBC",
+  "41" = "Immune (Pl)"
+)
+oralIntegrated <- subset(oralIntegrated,
+  idents = c("RBC"),
+  invert = TRUE
+)
+oralIntegrated$clusterCellTypes <- oralIntegrated@active.ident
+
+
+Idents(oralIntegrated) <- "seurat_clusters"
+
+# Rename idents by major cell type (e.g. Fib, Endo, Epi, etc)
+oralIntegrated <- RenameIdents(oralIntegrated,  
+  "0" = "Endothelial",
+  "1" = "Fibroblast",
+  "2" = "Immune",
+  "3" = "Immune",
+  "4" = "Immune",
+  "5" = "Endothelial",
+  "6" = "Immune",
+  "7" = "Immune",
+  "8" = "Epithelial",
+  "9" = "Fibroblast",
+  "10" = "Immune",
+  "11" = "Immune",
+  "12" = "Endothelial",
+  "13" = "SMC",
+  "14" = "Immune",
+  "15" = "SMC",
+  "16" = "Immune",
+  "17" = "Epithelial",
+  "18" = "Immune",
+  "19" = "Immune",
+  "20" = "Immune",
+  "21" = "Epithelial",
+  "23" = "LEC",
+  "24" = "Endothelial",
+  "25" = "Immune", 
+  "26" = "Cycling",
+  "27" = "Immune",
+  "28" = "Fibroblast",
+  "29" = "Immune",
+  "30" = "Immune",
+  "31" = "Immune",
+  "32" = "Melanocyte",
+  "33" = "SMC",
+  "34" = "Stressed",
+  "35" = "Immune",
+  "36" = "Immune",
+  "37" = "Fibroblast",
+  "38" = "Immune",
+  "39" = "Endothelial",
+  "41" = "Immune"
+)
+
+
+levels(oralIntegrated) <- c(
+  "Endothelial",
+  "Fibroblast",
+  "Immune",
+  "Epithelial",
+  "SMC",
+  "LEC",
+  "Melanocyte",
+  "Cycling",
+  "Stressed"
+)
+oralIntegrated$generalCellTypes <- oralIntegrated@active.ident
+```
+
+
+
+## Immune cell identification
+```{r classify immune cells}
+Idents(oralIntegrated) <- "generalCellTypes"
+im <- subset(oralIntegrated, idents = "Immune")
+
+
+# use SingleR
+# seurat object -> SingleCellExperiment
+immuneSCE <- as.SingleCellExperiment(im)
+
+# reference database
+mon.se <- MonacoImmuneData()
+pred.mon.fine <- SingleR(
+  test = immuneSCE,
+  ref = mon.se,
+  labels = mon.se$label.fine,
+  de.method = "classic",
+  fine.tune = TRUE,
+  assay.type.test = 1,
+  BPPARAM = MulticoreParam(8)
+)
+
+im[["mon.fine"]] <- pred.mon.fine$labels
+
+# Idents(im) <- "mon.fine"
+# DefaultAssay(im) <- "integrated"
+# im <- RunPCA(im, npcs = 50)
+# im <- RunUMAP(im, reduction = "pca", dims = 1:50)
+# Idents(im) <- "mon.fine"
+# DimPlot_scCustom(im, group.by = "mon.fine", reduction = "umap")
+
+Idents(im) <- "mon.fine"
+im <- RenameIdents(im,
+  "Intermediate monocytes" = "Monocyte",
+  "Classical monocytes" = "Monocyte",
+  "Exhausted B cells" = "B",
+  "Effector memory CD8 T cells" = "abT (CD8)",
+  "Myeloid dendritic cells" = "mDC",
+  "T regulatory cells" = "Treg",
+  "Th1 cells" = "abT (CD4)",
+  "Th2 cells" = "abT (CD4)",
+  "Th1/Th17 cells" = "abT (CD4)",
+  "Switched memory B cells" = "B",
+  "Low-density basophils" = "Mast",
+  "Terminal effector CD4 T cells" = "abT (CD4)",
+  "Progenitor cells" = "Mast",
+  "Natural killer cells" = "NK",
+  "Non-switched memory B cells" = "B",
+  "Central memory CD8 T cells" = "abT (CD8)",
+  "Terminal effector CD8 T cells" = "abT (CD8)",
+  "Non classical monocytes" = "Monocyte",
+  "Plasmacytoid dendritic cells" = "pDC",
+  "Naive CD4 T cells" = "abT (CD4)",
+  "Vd2 gd T cells" = "gd T",
+  "Th17 cells" = "Th17",
+  "Follicular helper T cells" = "abT (CD4)",
+  "Plasmablasts" = "Plasma",
+  "MAIT cells" = "MAIT",
+  "Naive CD8 T cells" = "abT (CD8)",
+  "Low-density neutrophils" = "Neutrophil",
+  "Non-Vd2 gd T cells" = "gd T",
+  "Naive B cells" = "B"
+)
+levels(im) <- c(
+  "abT (CD4)", "Th17", "MAIT", "abT (CD8)", "gd T", "Treg", "NK",
+  "pDC", "B", "Plasma",
+  "Neutrophil", "Monocyte", "mDC", "Mast"
+)
+im$mon.gen <- im@active.ident
+
+
+
+# DefaultAssay(im) <- "RNA"
+# immune.markers.2 <- FindAllMarkers(im, only.pos = TRUE)
+# im.sig.2 <- immune.markers.2[immune.markers.2$p_val_adj < 0.2, ]
+# im.top.2 <- im.sig.2 %>%
+#   group_by(cluster) %>%
+#   top_n(n = 30, wt = avg_log2FC)
+# write.csv(im.top.2, paste0(getwd(),
+#                            "/07_csv_outputs/", 
+#                            Sys.Date(),
+#                            "_immune_top30_SingleR.csv"))
+
+im <- RenameIdents(im,
+  "abT (CD4)" = "Lymphoid (T/NK)",
+  "Th17" = "Lymphoid (T/NK)",
+  "MAIT" = "Lymphoid (T/NK)",
+  "abT (CD8)" = "Lymphoid (T/NK)",
+  "gd T" = "Lymphoid (T/NK)",
+  "Treg" = "Lymphoid (T/NK)",
+  "NK" = "Lymphoid (T/NK)",
+  "pDC" = "Myeloid",
+  "B" = "Lymphoid (B)",
+  "Plasma" = "Lymphoid (Pl)",
+  # "Neutrophil" = "Neutrophil", Already correctly named
+  "Monocyte" = "Myeloid",
+  # "Mast" = "Mast", Already correctly named
+  "mDC" = "Myeloid"
+)
+levels(im) <- c("Lymphoid (T/NK)", "Lymphoid (Pl)", "Lymphoid (B)", "Myeloid", "Mast", "Neutrophil")
+im$imGen <- im@active.ident
+
+# Reassign and sort immune identities in the whole dataset based on SingleR annotations
+Idents(im) <- "mon.gen"
+# Generate a new column called fineCellTypes in the metadata
+oralIntegrated$fineCellTypes <- as.character(Idents(oralIntegrated))
+# Change the information of cells containing sub-cluster information
+oralIntegrated$fineCellTypes[Cells(im)] <- paste(Idents(im))
+Idents(oralIntegrated) <- "fineCellTypes"
+levels(oralIntegrated) <- c("Endothelial",
+  "Fibroblast",
+  "Epithelial",
+  "abT (CD4)", "Th17", "MAIT", "abT (CD8)", "gd T", "Treg", "NK",
+  "pDC", "B", "Plasma",
+  "Neutrophil", "Monocyte", "mDC", "Mast",
+  "SMC",
+  "LEC",
+  "Melanocyte",
+  "Cycling",
+  "Stressed")
+oralIntegrated$fineCellTypes <- oralIntegrated@active.ident
+
+Idents(oralIntegrated) <- "clusterCellTypes"
+Idents(im) <- "mon.gen"
+oralIntegrated$clusterCellTypes <- as.character(Idents(oralIntegrated))
+# Change the information of cells containing sub-cluster information
+oralIntegrated$clusterCellTypes[Cells(im)] <- paste(Idents(im))
+Idents(oralIntegrated) <- "clusterCellTypes"
+levels(oralIntegrated) <- c("Endothelial 1", "Endothelial 2", "Endothelial 3", "Endothelial 4",
+                            "Fibroblast 1", "Fibroblast 2", "Fibroblast 3", "Fibroblast 4", 
+                            "abT (CD4)", "Th17", "MAIT", "abT (CD8)", "gd T", "Treg", "NK",
+                            "pDC", "B", "Plasma",
+                            "Neutrophil", "Monocyte", "mDC", "Mast",
+                            "Epithelial 1", "Epithelial 2", "Epithelial 3", 
+                            "SMC", "LEC", "Melanocyte", "Cycling", "Stressed")
+oralIntegrated$clusterCellTypes <- oralIntegrated@active.ident
+
+
+# Reassign and sort immune identities in the whole dataset based on SingleR annotations (shortened to major immune subpopulations)
+Idents(oralIntegrated) <- "generalCellTypes"
+Idents(im) <- "imGen"
+# Generate a new column called fineCellTypes in the metadata
+oralIntegrated$generalCellTypes <- as.character(Idents(oralIntegrated))
+# Change the information of cells containing sub-cluster information
+oralIntegrated$generalCellTypes[Cells(im)] <- paste(Idents(im))
+Idents(oralIntegrated) <- "generalCellTypes"
+levels(oralIntegrated) <- c("Endothelial",
+  "Fibroblast",
+  "Epithelial",
+  "Lymphoid (T/NK)", 
+  "Lymphoid (Pl)", 
+  "Lymphoid (B)", 
+  "Myeloid", 
+  "Mast", 
+  "Neutrophil",
+  "SMC",
+  "LEC",
+  "Melanocyte",
+  "Cycling",
+  "Stressed")
+oralIntegrated$generalCellTypes <- oralIntegrated@active.ident
+
+# define the colors for 'fineCellType' clusters and store in the seurat object
+fineCellPal <- c("black", 
+                 rev(paletteer::paletteer_d(`"ggsci::default_nejm"`)), 
+                 paletteer::paletteer_d(`"ggsci::default_jco"`),
+                 paletteer::paletteer_d(`"ggsci::default_aaas"`))
+oralIntegrated <- Store_Misc_Info_Seurat(
+  seurat_object = oralIntegrated, data_to_store = fineCellPal,
+  data_name = "fineCellPal_colors",
+  overwrite = T
+)
+
+Idents(oralIntegrated) <- oralIntegrated$clusterCellTypes
+all.markers.1 <- FindAllMarkers(oralIntegrated, only.pos = TRUE, verbose = T) %>%
+  group_by(cluster)
+# Print some top markers
+top20 <- all.markers.1 %>%
+  group_by(cluster) %>%
+  top_n(n = 20, wt = avg_log2FC)
+top20
+fwrite(all.markers.1, file = paste0(getwd(),"/06_cluster_annotation/", 
+                                        Sys.Date(),
+                                       "_clusterCellTypes.csv"))
+```
+
+
+## Save new objects
+```{r save objects}
+baseDir <- "~/updatedAtlas-hu/04_data_objects/03_Analysis_objects/"
+saveRDS(oralIntegrated,
+  file = paste0(
+    baseDir,
+    Sys.Date(),
+    "_04_02-AnnotationOutput.RDS"
+  )
+)
+```
+
+## Session Info
+```{r session info}
+sessionInfo()
+```
