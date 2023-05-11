@@ -24,14 +24,14 @@ options(width = 1200)
 
 # Introduction
 
-The objective of this notebook is to add metadata to seurat objects. For some reason, when using Rmarkdown, the Add_Sample_Meta fails, but runs fine when running code chunks individually.
+The objective of this notebook is to add metadata to seurat objects. For some reason, when using Rmarkdown and loading the 10x samples csv file, the Add_Sample_Meta fails. This can be solved by saving the modified file using fwrite but runs fine when running code chunks individually.
 
 ## Load packages
 
 ```{r load packages}
 # load packages
 library(pacman)
-p_load(Seurat, scCustomize, dplyr, GEOquery)
+p_load(Seurat, scCustomize, dplyr, GEOquery, data.table)
 # load data
 baseDir <- "~/updatedAtlas-hu/04_data_objects/01_SoupX_objects/"
 NIH <- readRDS(file = paste0(baseDir, "2023-04-17_01-SoupxOutput.RDS"))
@@ -40,27 +40,31 @@ NIH <- readRDS(file = paste0(baseDir, "2023-04-17_01-SoupxOutput.RDS"))
 ## Add metadata to seurat objects
 ```{r add NIH meta}
 # read meta file from patient DB
-metaToAdd <- read.csv(file = "/home/williamsdrw/10x_samples.csv")
+metaToAdd <- fread(file = "/home/williamsdrw/10x_samples.csv")
 # get current seurat obj metadata
 currentMeta <- NIH@meta.data
 # select relevant metadata columns from the patient DB file
-colsToKeep <- names(metaToAdd)[c(1,4,7,10,11,13)]
-metaToAdd <- metaToAdd[,names(metaToAdd) %in% colsToKeep]
+metaToAdd <- metaToAdd[, c(1,4,7,10,11,12,13,24,25)]
 # select rows in the patient DB file that correspond to samples used in seurat obj
-metaToAdd <- metaToAdd[metaToAdd$Sample.ID %in% unique(currentMeta$orig.ident),]
+metaToAdd <- metaToAdd[metaToAdd$`Sample ID` %in% unique(currentMeta$orig.ident),]
 # rename some columns
-names(metaToAdd)[names(metaToAdd) == 'Sample.ID'] <- 'orig.ident'
+names(metaToAdd)[names(metaToAdd) == 'Sample ID'] <- 'orig.ident'
 names(metaToAdd)[names(metaToAdd) == 'Gender'] <- 'sex'
 names(metaToAdd)[names(metaToAdd) == 'Age'] <- 'age'
 names(metaToAdd)[names(metaToAdd) == 'Tech'] <- 'tech'
-names(metaToAdd)[names(metaToAdd) == 'Sample.Type'] <- 'tissue'
-# add additional info for cross-comparison with other datasets
-metaToAdd$ref <- "Williams 2021"
-metaToAdd$source <- "GSE164241"
+names(metaToAdd)[names(metaToAdd) == 'Sample Type'] <- 'tissue'
+names(metaToAdd)[names(metaToAdd) == 'Race'] <- 'race'
+
 # add the metadata using scCustomize function
 NIH <- Add_Sample_Meta(NIH, metaToAdd, join_by_meta = "orig.ident", join_by_seurat = "orig.ident")
 # check/confirm the structure of the seurat object metadata
-NIH@meta.data
+head(NIH@meta.data)
+# adjust some of the orig.ident to remove underscores
+Idents(NIH) <- "orig.ident"
+NIH <- RenameIdents(NIH,
+                    "ID081_tofa" = "ID081tofa",
+                    "OID48_ruxo" = "OID48ruxo",
+                    "OID67_ruxo" = "OID67ruxo")
 ```
 
 ```{r import caetano data}
