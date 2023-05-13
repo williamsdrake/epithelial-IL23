@@ -165,6 +165,22 @@ chen_srat <- Add_Sample_Meta(chen_srat, meta_data = metadata, join_by_meta = "or
 chen_srat@meta.data
 ```
 
+```{r}
+p_load(zellkonverter)
+
+martin19 <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/martin19.h5ad")
+cheng18 <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/cheng18.processed.h5ad")
+madissoon20 <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/madissoon20_oesophagus.processed.h5ad")
+smillie19 <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/smillie19_epi.processed.h5ad")
+vieira19_alv <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/vieira19_Alveoli_and_parenchyma_anonymised.processed.h5ad")
+vieira19_bro <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/vieira19_Bronchi_anonymised.processed.h5ad")
+vieira19_nas <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/vieira19_Nasal_anonymised.processed.h5ad")
+wang20_col <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/wang20_colon.processed.h5ad")
+wang20_il <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/wang20_ileum.processed.h5ad")
+deprez19 <- readH5AD("/home/williamsdrw/epithelial-IL23/02_raw_data/deprez19_restricted.processed.h5ad")
+```
+
+
 
 ```{r combine objects and save}
 # combine all seurat files
