@@ -25,49 +25,19 @@ options(width = 1200)
 
 # Introduction
 
-The objective of this notebook is to add metadata to seurat objects (ours), load datasets from CZI CELLxGENE, and merge everything together. For some reason, when using Rmarkdown and loading the 10x samples csv file, the Add_Sample_Meta fails. This can be solved by saving the modified file using fwrite but runs fine when running code chunks individually.
+The objective of this notebook is to load datasets from CZI CELLxGENE and change ENSEMBL gene names to gene symbols
 
 ## Load packages
 
 ```{r load packages}
 # load packages
 library(pacman)
-p_load(Seurat, scCustomize, dplyr, org.Hs.eg.db, DropletUtils, data.table)
-
-# Since this is the first file in the Epi-23 workflow, set up folder structure
-scCustomize::Setup_scRNAseq_Project(custom_dir_file = "/home/williamsdrw/scSeq_dirs.csv")
-
-# load data
-baseDir <- "/home/williamsdrw/updatedAtlas-hu/04_data_objects/03_Analysis_objects/"
-NIH <- readRDS(file = paste0(baseDir, "2023-05-05_04_02-AnnotationOutput.RDS"))
+p_load(Seurat, 
+       scCustomize, 
+       dplyr, 
+       org.Hs.eg.db, 
+       ggpubr)
 ```
-
-## Add metadata and tidy our dataset
-```{r tidy our dataset}
-Idents(NIH) <- "generalCellTypes"
-NIH <- subset(NIH, idents = "Epithelial") %>%
-  DietSeurat()
-Idents(NIH) <- "tech"
-NIH <- RenameIdents(NIH, 
-                    "10x 3' RNAseq (V3)" = "10x 3' v3")
-NIH$assay <- NIH@active.ident
-Idents(NIH) <- "sex"
-NIH <- RenameIdents(NIH, 
-                    "M" = "male",
-                    "F" = "female")
-Idents(NIH) <- "status"
-NIH <- RenameIdents(NIH, 
-                    "MP" = "periodontitis (mild)",
-                    "P" = "periodontitis",
-                    "H" = "normal",
-                    "P_treated" = "periodontitis (treated)")
-NIH$disease <- NIH@active.ident
-NIH$status <- NULL
-NIH$tech <- NULL
-NIH$cell_type <- NIH$clusterCellTypes
-
-```
-
 ## Import all CZI datasets
 ```{r generate czi seurat list, cache=TRUE}
 # Data came in the format of an individual RDS
@@ -98,8 +68,7 @@ seurat_objects[[1]]$source <- "czi_cellxgene"
 seurat_objects[[1]]$orig.ident <- seurat_objects[[1]]$sample_id
 # extract epithelial cells
 Idents(seurat_objects[[1]]) <- "Cell_type_annotation_level1"
-y <- subset(seurat_objects[[1]], idents = "Epi") %>%
-  DietSeurat()
+y <- subset(seurat_objects[[1]], idents = "Epi")
 ```
 
 ```{r}
@@ -108,18 +77,15 @@ seurat_objects[[2]]$source <- "czi_cellxgene"
 seurat_objects[[2]]$orig.ident <- seurat_objects[[2]]$donor_id
  # extract epithelial cells
 Idents(seurat_objects[[2]]) <- "cell_type"
-c <- subset(seurat_objects[[2]], idents = c("ionocyte", "hepatocyte", "neuroendocrine cell"), invert = T) %>%
-  DietSeurat()
+c <- subset(seurat_objects[[2]], idents = c("ionocyte", "hepatocyte", "neuroendocrine cell"), invert = T)
 ```
 
 ```{r}
-
 seurat_objects[[3]]$ref <- "Kong 2023"
 seurat_objects[[3]]$source <- "czi_cellxgene"
 seurat_objects[[3]]$orig.ident <- seurat_objects[[3]]$biosample_id
 # This dataset was downloaded as epithelial only
-k1 <- seurat_objects[[3]] %>%
-  DietSeurat()
+k1 <- seurat_objects[[3]]
 ```
 
 ```{r}
@@ -128,8 +94,7 @@ seurat_objects[[4]]$source <- "czi_cellxgene"
 seurat_objects[[4]]$orig.ident <- seurat_objects[[4]]$sample
 # extract epithelial cells
 Idents(seurat_objects[[4]]) <- "ann_coarse"
-s <- subset(seurat_objects[[4]], idents = c("Epithelial cell")) %>%
-  DietSeurat()
+s <- subset(seurat_objects[[4]], idents = c("Epithelial cell"))
 ```
 
 ```{r}
@@ -137,39 +102,78 @@ seurat_objects[[5]]$ref <- "Tabula Sapiens 2022"
 seurat_objects[[5]]$source <- "czi_cellxgene"
 seurat_objects[[5]]$orig.ident <- seurat_objects[[5]]$donor_id
 # This dataset was downloaded as epithelial only
-t <- seurat_objects[[5]] %>%
-  DietSeurat()
+t <- seurat_objects[[5]]
 ```
 
-```{r}
+```{r, fig.width=6.5, fig.height=4.5}
 seurat_objects[[6]]$ref <- "Kong 2023"
 seurat_objects[[6]]$source <- "czi_cellxgene"
 seurat_objects[[6]]$orig.ident <- seurat_objects[[6]]$biosample_id
 # This dataset was downloaded as epithelial only
-k2 <- seurat_objects[[6]] %>% 
-  DietSeurat()
+k2 <- seurat_objects[[6]]
+
+
+
+# cell types on x axis: fig.width=6.5, fig.height=4.5
+# cell types on y axis: 
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 2.5) + 
+  stat_compare_means(method = "t.test",
+                     label = "p.signif") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45))
+
+# cell types on x axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 2.5) + 
+  stat_compare_means(method = "t.test",
+                     label = "p.signif") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45))
+# cell types on y axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 2.5) + 
+  stat_compare_means(method = "t.test",
+                     label = "p.signif") +
+  theme(axis.title.y = element_blank()) + 
+  coord_flip()
 ```
 
-## Downsample datasets to the smallest number of cells in a dataset (ours is the smallest)
+## Downsample datasets to 20k cells
 The datasets from CZI also have ENSEMBL gene names instead of gene symbols. For each of the datasets, feature names are converted to the appropriate symbol after downsampling
 ```{r downsample objects}
 source("~/epithelial-IL23/01_scripts/analysisHelpers.R")
-cellNum <- c(ncol(NIH), ncol(y), ncol(c), ncol(k1), ncol(s), ncol(t), ncol(k2))
-indx <- which.min(cellNum)
+indx <- 20000
 
-NIH <- downsampleSeurat(NIH, cellNum[indx])
-y <- downsampleSeurat(y, cellNum[indx])
+y <- downsampleSeurat(y, indx)
 y <- convertEnsemblRownames(y)
-c <- downsampleSeurat(c, cellNum[indx])
+c <- downsampleSeurat(c, indx)
 c <- convertEnsemblRownames(c)
-k1 <- downsampleSeurat(k1, cellNum[indx])
+k1 <- downsampleSeurat(k1, indx)
 k1 <- convertEnsemblRownames(k1)
-s <- downsampleSeurat(s, cellNum[indx])
+s <- downsampleSeurat(s, indx)
 s <- convertEnsemblRownames(s)
-t <- downsampleSeurat(t, cellNum[indx])
+t <- downsampleSeurat(t, indx)
 t <- convertEnsemblRownames(t)
-k2 <- downsampleSeurat(k2, cellNum[indx])
+k2 <- downsampleSeurat(k2, indx)
 k2 <- convertEnsemblRownames(k2)
+```
+
+```{r clear memory}
+seurat_objects <- NULL
+gc()
 ```
 
 ## Merge all datasets and save for the next step

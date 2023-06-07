@@ -17,7 +17,8 @@ knitr::opts_chunk$set(echo = TRUE,
   message = F, 
   message = F,
   out.width = "100%", 
-                      fig.align='center')
+                      fig.align='center',
+  time_it = TRUE)
 options(width = 1200)
 ```
 
@@ -34,37 +35,26 @@ pacman::p_load(Seurat, ggplot2, scCustomize)
 
 ## Load datasets
 ```{r load datasets}
-combined <- readRDS(file = "~/updatedAtlas-hu/04_data_objects/02_QC_objects/2023-04-19_02-QCOutput.RDS")
+combined <- readRDS(file = "/home/williamsdrw/epithelial-IL23/04_data_objects/01_SoupX_objects/2023-06-02_015-allWithMeta.RDS")
 ```
 
-## Downsample objects (not run)
-
-The purpose of this step is to compare treatment groups that start with different numbers of cells.
-
-```{r downsample, eval = F}
-source("~/updatedAtlas-hu/01_scripts/analysisHelpers.R")
-cellNum <- c(ncol(health), ncol(perio), ncol(lad))
-indx <- which.min(cellNum)
-
-health <- downsampleSeurat(health, cellNum[indx])
-perio <- downsampleSeurat(perio, cellNum[indx])
-lad <- downsampleSeurat(lad, cellNum[indx])
-```
 ## Normalize seurat objects
 Initially I tried to use SCT integration, however this gave me the following error during the integration step: Error in .T2C(newTMat(i = c(ij1[, 1], ij2[, 1]), j = c(ij1[, 2], ij2[, : unable to coerce from TsparseMatrix to [CR]sparseMatrixwhen length of 'i' slot exceeds 2^31-1. Several others have had this error, but seurat devs have not been very helpful in resolving.
 
 So, following the tutorial (https://satijalab.org/seurat/articles/integration_large_datasets.html)[here], use the reference approach for integrating large datasets.
 ```{r normalization}
 # run normalization on datasets divided by sample
-combined_bySample <- SplitObject(combined, split.by = "orig.ident")
+# combined_bySample <- SplitObject(combined, split.by = "orig.ident")
+# combined_byTissue <- SplitObject(combined, split.by = "tissue")
+combined_byRef <- SplitObject(combined, split.by = "ref")
 
-combined_bySample <- lapply(X = combined_bySample, FUN = function(x) {
+combined_byRef <- lapply(X = combined_byRef, FUN = function(x) {
     x <- NormalizeData(x, verbose = FALSE)
     x <- FindVariableFeatures(x, verbose = FALSE)
     })
 
-features <- SelectIntegrationFeatures(object.list = combined_bySample)
-combined_bySample <- lapply(X = combined_bySample, FUN = function(x) {
+features <- SelectIntegrationFeatures(object.list = combined_byRef)
+combined_byRef <- lapply(X = combined_byRef, FUN = function(x) {
     x <- ScaleData(x, features = features, verbose = FALSE)
     x <- RunPCA(x, features = features, verbose = FALSE)
 })
@@ -99,7 +89,7 @@ If using RPCA + reference, it takes considerably less (less than 1hr), so you ca
 # Find integration anchors
 # Note: these two steps take a long time.
 
-anchors <- FindIntegrationAnchors(object.list = combined_bySample, reference = c(1:5), reduction = "rpca",
+anchors <- FindIntegrationAnchors(object.list = combined_byRef, reference = c(1,4,8), reduction = "rpca",
     dims = 1:50)
 combined.int <- IntegrateData(anchorset = anchors, dims = 1:50)
 
@@ -107,7 +97,7 @@ combined.int <- IntegrateData(anchorset = anchors, dims = 1:50)
 
 ## Save new objects
 ```{r save objects}
-baseDir <- "~/updatedAtlas-hu/04_data_objects/03_Analysis_objects/"
+baseDir <- "~/epithelial-IL23/04_data_objects/03_Analysis_objects/"
 saveRDS(combined.int, file = paste0(baseDir, Sys.Date(), "_03-IntegrationOutput.RDS"))
 ```
 

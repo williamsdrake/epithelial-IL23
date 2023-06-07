@@ -35,7 +35,7 @@ p_load(Seurat, scCustomize, dplyr)
 
 ## Load datasets and metadata
 ```{r load datasets}
-combined <- readRDS(file = "/home/williamsdrw/updatedAtlas-hu/04_data_objects/01_SoupX_objects/2023-04-19_015-allWithMeta.RDS")
+combined <- readRDS(file = "/home/williamsdrw/epithelial-IL23/04_data_objects/01_SoupX_objects/2023-05-27_015-allWithMeta.RDS")
 ```
 
 
@@ -43,7 +43,7 @@ combined <- readRDS(file = "/home/williamsdrw/updatedAtlas-hu/04_data_objects/01
 
 ### all samples
 ```{r all QC, fig.height=40, fig.width=40}
-combined <- Add_Mito_Ribo_Seurat(combined, species = "human")
+combined <- Add_Mito_Ribo_Seurat(combined, species = "human", overwrite = T)
 combined <- PercentageFeatureSet(combined, "^HB", col.name = "percent_hb")
 VlnPlot(combined,
   features = c(
@@ -114,7 +114,7 @@ boxplot(boxTable,
 
 ## Save new objects
 ```{r save objects}
-baseDir <- "~/updatedAtlas-hu/04_data_objects/02_QC_objects/"
+baseDir <- "~/epithelial-IL23/04_data_objects/02_QC_objects/"
 saveRDS(combined, file = paste0(baseDir, Sys.Date(), "_02-QCOutput.RDS"))
 ```
 
