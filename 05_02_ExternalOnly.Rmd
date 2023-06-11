@@ -37,95 +37,123 @@ p_load(Seurat,
        dplyr, 
        org.Hs.eg.db, 
        ggpubr)
+source("~/epithelial-IL23/01_scripts/analysisHelpers.R")
 ```
 ## Import all CZI datasets
-```{r generate czi seurat list, cache=TRUE}
-# Data came in the format of an individual RDS
-# Function to load all data in the folder into a list of seurat objects
-read_rds_files <- function(folder) {
-  # Get a list of all RDS files in the folder
-  rds_files <- list.files(folder, pattern = "\\.rds$")
-
-  # Add the path to each RDS file
-  rds_files <- file.path(folder, rds_files)
-
-  # Read each RDS file and create a Seurat object
-  seurat_objects <- lapply(rds_files, readRDS)
-
-  # Return a list of Seurat objects, where the name of each object is the name of the file
-  return(setNames(seurat_objects, rds_files))
-}
-
+```{r generate czi seurat list}
 folder <- "/home/williamsdrw/epithelial-IL23/02_raw_data/czi/"
 seurat_objects <- read_rds_files(folder)
 ```
 
 ## Modify metadata and trim CZI datasets
-```{r}
+### Yoshida 2022
+```{r y, fig.width=6.5, fig.height=4.5}
 # modify metadata
 seurat_objects[[1]]$ref <- "Yoshida 2022"
 seurat_objects[[1]]$source <- "czi_cellxgene"
-seurat_objects[[1]]$orig.ident <- seurat_objects[[1]]$sample_id
+meta <- seurat_objects[[1]]$sample_id
+meta <- gsub("_", "-", as.character(meta))
+seurat_objects[[1]]$orig.ident <- meta
+
 # extract epithelial cells
 Idents(seurat_objects[[1]]) <- "Cell_type_annotation_level1"
-y <- subset(seurat_objects[[1]], idents = "Epi")
-```
+seurat_objects[[1]] <- subset(seurat_objects[[1]], idents = "Epi")
+# define the number of total cells to downsample by
+indx <- 20000
+seurat_objects[[1]] <- downsampleSeurat(seurat_objects[[1]], indx)
+seurat_objects[[1]] <- convertEnsemblRownames(seurat_objects[[1]])
 
-```{r}
-seurat_objects[[2]]$ref <- "Chan 2021"
-seurat_objects[[2]]$source <- "czi_cellxgene"
-seurat_objects[[2]]$orig.ident <- seurat_objects[[2]]$donor_id
- # extract epithelial cells
-Idents(seurat_objects[[2]]) <- "cell_type"
-c <- subset(seurat_objects[[2]], idents = c("ionocyte", "hepatocyte", "neuroendocrine cell"), invert = T)
-```
-
-```{r}
-seurat_objects[[3]]$ref <- "Kong 2023"
-seurat_objects[[3]]$source <- "czi_cellxgene"
-seurat_objects[[3]]$orig.ident <- seurat_objects[[3]]$biosample_id
-# This dataset was downloaded as epithelial only
-k1 <- seurat_objects[[3]]
-```
-
-```{r}
-seurat_objects[[4]]$ref <- "Sikkema 2022"
-seurat_objects[[4]]$source <- "czi_cellxgene"
-seurat_objects[[4]]$orig.ident <- seurat_objects[[4]]$sample
-# extract epithelial cells
-Idents(seurat_objects[[4]]) <- "ann_coarse"
-s <- subset(seurat_objects[[4]], idents = c("Epithelial cell"))
-```
-
-```{r}
-seurat_objects[[5]]$ref <- "Tabula Sapiens 2022"
-seurat_objects[[5]]$source <- "czi_cellxgene"
-seurat_objects[[5]]$orig.ident <- seurat_objects[[5]]$donor_id
-# This dataset was downloaded as epithelial only
-t <- seurat_objects[[5]]
-```
-
-```{r, fig.width=6.5, fig.height=4.5}
-seurat_objects[[6]]$ref <- "Kong 2023"
-seurat_objects[[6]]$source <- "czi_cellxgene"
-seurat_objects[[6]]$orig.ident <- seurat_objects[[6]]$biosample_id
-# This dataset was downloaded as epithelial only
-k2 <- seurat_objects[[6]]
-
-
+# generate a seurat object with bulk expression based on cell type, disease status, and donor
+bulk <- getBulkExpression(seu = seurat_objects[[1]],
+                          cellType = "cell_type",
+                          donor = "orig.ident",
+                          disease = "disease",
+                          diseaseLevels = c("normal", "COVID-19"))
 
 # cell types on x axis: fig.width=6.5, fig.height=4.5
-# cell types on y axis: 
 VlnPlot_scCustom(bulk, features = c("IL23A"),
                  pt.size = 0.5,
                  colors_use = c("Grey", "Red"),
                  group.by = "celltype", 
                  split.by = "disease",
-                 y.max = 2.5) + 
-  stat_compare_means(method = "t.test",
+                 y.max = 4.5) + 
+  stat_compare_means(label="p.signif") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45))
+# cell types on y axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 4.5) + 
+  stat_compare_means(label = "p.signif") +
+  theme(axis.title.y = element_blank()) + 
+  coord_flip()
+```
+
+### Chan 2021
+```{r c, fig.width=6.5, fig.height=4.5}
+seurat_objects[[2]]$ref <- "Chan 2021"
+seurat_objects[[2]]$source <- "czi_cellxgene"
+meta <- seurat_objects[[2]]$donor_id
+meta <- gsub("_", "-", as.character(meta))
+seurat_objects[[2]]$orig.ident <- meta
+# extract epithelial cells
+Idents(seurat_objects[[2]]) <- "cell_type"
+seurat_objects[[2]] <- subset(seurat_objects[[2]], idents = c("ionocyte", "hepatocyte", "neuroendocrine cell"), invert = T)
+
+seurat_objects[[2]] <- downsampleSeurat(seurat_objects[[2]], indx)
+seurat_objects[[2]] <- convertEnsemblRownames(seurat_objects[[2]])
+
+# generate a seurat object with bulk expression based on cell type, disease status, and donor
+bulk <- getBulkExpression(seu = seurat_objects[[2]],
+                          cellType = "cell_type",
+                          donor = "orig.ident",
+                          disease = "disease",
+                          diseaseLevels = c("normal", "lung adenocarcinoma", "small cell lung carcinoma"))
+
+# cell types on x axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 8) + 
+  stat_compare_means(method = "anova",
                      label = "p.signif") +
   theme(axis.title.x = element_blank(),
         axis.text.x = element_text(angle = 45))
+# cell types on y axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 8) + 
+  stat_compare_means(method = "anova",
+                     label = "p.signif") +
+  theme(axis.title.y = element_blank()) + 
+  coord_flip()
+```
+
+### Kong 2023
+```{r k, fig.width=5.5, fig.height=5.5}
+seurat_objects[[3]]$ref <- "Kong 2023"
+seurat_objects[[3]]$source <- "czi_cellxgene"
+meta <- seurat_objects[[3]]$biosample_id
+meta <- gsub("_", "-", as.character(meta))
+seurat_objects[[3]]$orig.ident <- meta
+
+seurat_objects[[3]] <- downsampleSeurat(seurat_objects[[3]], indx)
+seurat_objects[[3]] <- convertEnsemblRownames(seurat_objects[[3]])
+
+# generate a seurat object with bulk expression based on cell type, disease status, and donor
+bulk <- getBulkExpression(seu = seurat_objects[[3]],
+                          cellType = "cell_type",
+                          donor = "orig.ident",
+                          disease = "disease",
+                          diseaseLevels = c("normal", "Crohn disease"))
 
 # cell types on x axis: fig.width=6.5, fig.height=4.5
 VlnPlot_scCustom(bulk, features = c("IL23A"),
@@ -133,7 +161,135 @@ VlnPlot_scCustom(bulk, features = c("IL23A"),
                  colors_use = c("Grey", "Red"),
                  group.by = "celltype", 
                  split.by = "disease",
-                 y.max = 2.5) + 
+                 y.max = 3) + 
+  stat_compare_means(method = "anova",
+                     label = "p.signif") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45))
+# cell types on y axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 3) + 
+  stat_compare_means(method = "anova",
+                     label = "p.signif") +
+  theme(axis.title.y = element_blank()) + 
+  coord_flip()
+```
+### Sikkema 2022
+```{r s, fig.width=6.5, fig.height=4.5}
+seurat_objects[[4]]$ref <- "Sikkema 2023"
+seurat_objects[[4]]$source <- "czi_cellxgene"
+meta <- seurat_objects[[4]]$sample
+meta <- gsub("_", "-", as.character(meta))
+seurat_objects[[4]]$orig.ident <- meta
+# extract epithelial cells
+Idents(seurat_objects[[4]]) <- "ann_coarse"
+seurat_objects[[4]] <- subset(seurat_objects[[4]], idents = c("Epithelial cell"))
+
+seurat_objects[[4]] <- downsampleSeurat(seurat_objects[[4]], indx)
+seurat_objects[[4]] <- convertEnsemblRownames(seurat_objects[[4]])
+
+# generate a seurat object with bulk expression based on cell type, disease status, and donor
+bulk <- getBulkExpression(seu = seurat_objects[[4]],
+                          cellType = "cell_type",
+                          donor = "orig.ident",
+                          disease = "disease",
+                          diseaseLevels = c("normal", 
+                                            "chronic obstructive pulmonary disease", 
+                                            "lung adenocarcinoma", 
+                                            "non-small cell lung carcinoma", 
+                                            "squamous cell lung carcinoma"))
+
+# cell types on x axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 5) + 
+  stat_compare_means(method = "anova",
+                     label = "p.signif") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45))
+# cell types on y axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 4) + 
+  stat_compare_means(method = "anova",
+                     label = "p.signif") +
+  theme(axis.title.y = element_blank()) + 
+  coord_flip()
+
+```
+## Tabula Sapiens dataset
+```{r tabula sapiens, fig.width=6, fig.height=16}
+seurat_objects[[5]]$ref <- "Tabula Sapiens 2022"
+seurat_objects[[5]]$source <- "czi_cellxgene"
+meta <- seurat_objects[[5]]$donor_id
+meta <- gsub("_", "-", as.character(meta))
+seurat_objects[[5]]$orig.ident <- meta
+# This dataset was downloaded as epithelial only
+seurat_objects[[5]] <- downsampleSeurat(seurat_objects[[5]], indx)
+seurat_objects[[5]] <- convertEnsemblRownames(seurat_objects[[5]])
+
+# generate a seurat object with bulk expression based on cell type, disease status, and donor
+bulk <- getBulkExpression(seu = seurat_objects[[5]],
+                          cellType = "cell_type",
+                          donor = "orig.ident",
+                          disease = "disease",
+                          diseaseLevels = c("normal"))
+
+# cell types on x axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 5) +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 45))
+# cell types on y axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 4) + 
+  theme(axis.title.y = element_blank()) + 
+  coord_flip()
+```
+
+## Kong dataset
+```{r k2, fig.width=6.5, fig.height=4.5}
+seurat_objects[[6]]$ref <- "Kong 2023"
+seurat_objects[[6]]$source <- "czi_cellxgene"
+meta <- seurat_objects[[6]]$biosample_id
+meta <- gsub("_", "-", as.character(meta))
+seurat_objects[[6]]$orig.ident <- meta
+# This dataset was downloaded as epithelial only
+seurat_objects[[6]] <- downsampleSeurat(seurat_objects[[6]], indx)
+seurat_objects[[6]] <- convertEnsemblRownames(seurat_objects[[6]])
+
+# generate a seurat object with bulk expression based on cell type, disease status, and donor
+bulk <- getBulkExpression(seu = seurat_objects[[6]],
+                          cellType = "cell_type",
+                          donor = "orig.ident",
+                          disease = "disease",
+                          diseaseLevels = c("normal", "Crohn disease"))
+
+# cell types on x axis: fig.width=6.5, fig.height=4.5
+VlnPlot_scCustom(bulk, features = c("IL23A"),
+                 pt.size = 0.5,
+                 colors_use = c("Grey", "Red"),
+                 group.by = "celltype", 
+                 split.by = "disease",
+                 y.max = 3) + 
   stat_compare_means(method = "t.test",
                      label = "p.signif") +
   theme(axis.title.x = element_blank(),
@@ -144,45 +300,20 @@ VlnPlot_scCustom(bulk, features = c("IL23A"),
                  colors_use = c("Grey", "Red"),
                  group.by = "celltype", 
                  split.by = "disease",
-                 y.max = 2.5) + 
+                 y.max = 4) + 
   stat_compare_means(method = "t.test",
                      label = "p.signif") +
   theme(axis.title.y = element_blank()) + 
   coord_flip()
 ```
 
-## Downsample datasets to 20k cells
-The datasets from CZI also have ENSEMBL gene names instead of gene symbols. For each of the datasets, feature names are converted to the appropriate symbol after downsampling
-```{r downsample objects}
-source("~/epithelial-IL23/01_scripts/analysisHelpers.R")
-indx <- 20000
-
-y <- downsampleSeurat(y, indx)
-y <- convertEnsemblRownames(y)
-c <- downsampleSeurat(c, indx)
-c <- convertEnsemblRownames(c)
-k1 <- downsampleSeurat(k1, indx)
-k1 <- convertEnsemblRownames(k1)
-s <- downsampleSeurat(s, indx)
-s <- convertEnsemblRownames(s)
-t <- downsampleSeurat(t, indx)
-t <- convertEnsemblRownames(t)
-k2 <- downsampleSeurat(k2, indx)
-k2 <- convertEnsemblRownames(k2)
-```
-
-```{r clear memory}
-seurat_objects <- NULL
-gc()
-```
-
-## Merge all datasets and save for the next step
-```{r combine objects and save}
-# combine all seurat files
-all <- merge(x=NIH, y=c(y, c, k1, s, t, k2))
+## Save downsampled object list3
+```{r save}
+# # combine all seurat files
+# all <- merge(x=NIH, y=c(y, c, k1, s, t, k2))
 # save seurat obj with meta
-baseDir <- "~/epithelial-IL23/04_data_objects/01_SoupX_objects/"
-saveRDS(all, file = paste0(baseDir, Sys.Date(), "_015-allWithMeta.RDS"))
+baseDir <- "~/epithelial-IL23/04_data_objects/03_Analysis_objects/"
+saveRDS(seurat_objects, file = paste0(baseDir, Sys.Date(), "_05_02-ExternalOnly.RDS"))
 ```
 
 ```{r session info}
