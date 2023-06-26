@@ -81,17 +81,6 @@ bulk <- subset(bulk,
                           "native cell"),
                invert = T)
 
-# # cell types on x axis: fig.width=6.5, fig.height=4.5
-# VlnPlot_scCustom(bulk, features = c("IL23A"),
-#                  pt.size = 0.5,
-#                  colors_use = c("Grey", "Red"),
-#                  group.by = "celltype",
-#                  split.by = "disease",
-#                  y.max = 4.5) +
-#   stat_compare_means(label="p.signif") +
-#   theme(axis.title.x = element_blank(),
-#         axis.text.x = element_text(angle = 45))
-# cell types on y axis: fig.width=6.5, fig.height=4.5
 lungYosh <- VlnPlot_scCustom(bulk, features = c("IL23A"),
                  pt.size = 0.5,
                  colors_use = c("Red", "Gray"),
@@ -114,10 +103,12 @@ cairo_pdf(filename="/home/williamsdrw/epithelial-IL23/08_final_plots_for_figures
           height=3)
 lungYosh
 dev.off()
+
+yoshStat <- ggplot_build(lungYosh)
 ```
 
 ### Chan 2021
-```{r c, fig.width=6.5, fig.height=4.5, eval = F}
+```{r c, fig.width=6.5, fig.height=4.5, eval = F, echo=F}
 seurat_objects[[2]]$ref <- "Chan 2021"
 seurat_objects[[2]]$source <- "czi_cellxgene"
 meta <- seurat_objects[[2]]$donor_id
@@ -273,7 +264,7 @@ lungSik
 dev.off()
 ```
 
-## Kong 2023 - Terminal Ileum
+### Kong 2023 - Terminal Ileum
 ```{r k2, fig.width=4.5, fig.height=3}
 seurat_objects[[6]]$ref <- "Kong 2023"
 seurat_objects[[6]]$source <- "czi_cellxgene"
@@ -330,7 +321,7 @@ ileum
 dev.off()
 ```
 
-## Tabula Sapiens dataset
+### Tabula Sapiens dataset
 ```{r tabula sapiens, fig.width=14, fig.height=10}
 seurat_objects[[5]]$ref <- "Tabula Sapiens 2022"
 seurat_objects[[5]]$source <- "czi_cellxgene"
@@ -596,7 +587,7 @@ dev.off()
 
 
 
-## Save processed objects
+# Save processed objects
 ```{r save}
 # # combine all seurat files
 # all <- merge(x=NIH, y=c(y, c, k1, s, t, k2))
