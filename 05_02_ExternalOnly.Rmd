@@ -41,7 +41,8 @@ p_load(Seurat,
        ggpubr,
        data.table,
        paletteer,
-       Cairo)
+       Cairo,
+       rstatix)
 source("~/epithelial-IL23/01_scripts/analysisHelpers.R")
 ```
 # Import all CZI datasets
@@ -566,16 +567,19 @@ skin <- VlnPlot_scCustom(bulk, features = c("IL23A"),
                  group.by = "celltype", 
                  split.by = "disease",
                  y.max = 8) + 
-  stat_compare_means(method = "anova",
-                     label = "p.signif",
-                     label.y = 7.5) +
-  stat_compare_means(comparisons = list(c("normal", "Psoriasis"), c("normal", "Eczema"))) +
   theme(axis.title.y = element_blank(),
         axis.title.x = element_blank(),
         axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=0.5)) +
     scale_y_continuous(breaks=seq(0,8,2),
                      limits=c(0, 8)) +
   coord_flip()
+
+skindf$split<- as.factor(skindf$split)
+
+skindf <- skin$data 
+stat <- skindf %>%
+  group_by(ident) %>%
+  t_test(IL23A ~ split, ref.group = "normal")
 
 # cell types on y axis: fig.width=5.5, fig.height=7
 cairo_pdf(filename="/home/williamsdrw/epithelial-IL23/08_final_plots_for_figures/IL23A-Reynolds2021-skin.pdf",
