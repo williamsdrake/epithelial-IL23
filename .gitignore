@@ -63,10 +63,3 @@ Analysis/
 
 # misplaced RDS files
 *.RDS
-
-01.5_Metadata.Rmd
-02_QC.Rmd
-03_Integration.Rmd
-04_01_Clustering.Rmd
-04_02_CellAnnotation.Rmd
-05_01_gingAnalysis.Rmd
